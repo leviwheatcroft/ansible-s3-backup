@@ -1,0 +1,10 @@
+---
+
+s3cmd_secret_key: ''
+s3cmd_gpg_passphrase: ''
+s3cmd_access_key: ''
+s3cmd_trickle: 'True'
+s3cmd_trickle_up: ''
+s3cmd_trickle_down: ''
+s3cmd_args: ''
+

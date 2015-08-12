@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for include in item.include %}
+{{ include }}
+{% endfor %}

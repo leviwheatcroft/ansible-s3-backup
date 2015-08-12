@@ -1,0 +1,123 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# sorry I know the format here is ugly, but it makes the jinja template a
+# little more readable.
+
+# ================================================================= setup log ==
+logfile="/var/log/s3cmd.log"
+stdoutfile="/var/log/s3cmd.output.log"
+listfile="/etc/s3cmd/jobfiles.list"
+
+echo '' > $logfile
+echo '' > $stdoutfile
+echo "Subject: s3cmd backup {{ ansible_fqdn }}" >> $logfile
+echo "To: {{ s3cmd_email }}" >> $logfile
+echo "\nYour backup log ... \(stdout attached\)" >> $logfile
+echo $(date +%F) >> $logfile
+
+# ====================================================== for each job in list ==
+{% for job in s3cmd_jobs %}
+# log job start
+
+echo "[" $(date +%T) "]" "Starting {{ job.name }}" >> $logfile
+{% for key, value in job.iteritems() %}
+echo "{{ key }}: {{ value }}" >> $logfile
+{% endfor %}
+
+# ===================================================================== stats ==
+find \
+{{ job.path }} \
+! \( \
+{% for excludeGlob in job.exclude %}
+-name {{ excludeGlob }} \
+{% endfor %}
+! \( \
+{% for includeGlob in job.include %}
+-name {{ includeGlob }} \
+{% endfor %}
+\) \
+\) \
+-fprint0 $listfile
+job_count=$(tr -cd '\0' < $listfile | wc -c)
+job_size=$(du --human-readable --total --summarize --files0-from=$listfile | grep 'total' |egrep -o '^.*\s')
+echo "job will check $job_count files"
+echo "files consume $job_size disk space"
+rm $listfile
+
+# =================================================================== execute ==
+{% if not s3cmd_dry_run %}
+{% if s3cmd_trickle %}
+trickle -s \
+  {{ '-u %s' % s3cmd_trickle_up if s3cmd_trickle_up else '' }} \
+  {{ '-d %s' % s3cmd_trickle_down if s3cmd_trickle_down else '' }} \
+  {{ '%s' % s3cmd_trickle_args if s3cmd_trickle_args else '' }} \
+{% endif %} \
+s3cmd sync \
+  --config=/etc/s3cmd/.s3cfg \
+  {{ job.args }} \
+  --exclude-from=/etc/s3cmd/{{ job.name }}.excl \
+  --include-from=/etc/s3cmd/{{ job.name }}.incl \
+  {{ job.path }} \
+  S3://{{ job.bucket }} >> $stdoutfile
+{% endif %}
+
+# ============================================================ log job finish ==
+echo "[" $(date +%T) "]" "finished {{ job.name }}" >> $logfile
+
+{% endfor %}
+
+# ========================================================= send log as email ==
+# I stole this from:
+# http://backreference.org/2013/05/22/send-email-with-attachments-from-script-or-command-line/
+
+# ---------------------------------------------------------------------- vars --
+from="s3cmd@{{ ansible_fqdn }}"
+to="{{ s3cmd_email }}"
+subject="s3cmd backup log"
+boundary="ZZ_/afg6432dfgkl.94531q"
+body=$(<$logfile)
+
+
+
+
+# ----------------------------------------------------------------- the email --
+{
+
+printf '%s\n' "From: $from
+To: $to
+Subject: $subject
+Mime-Version: 1.0
+Content-Type: multipart/mixed; boundary=\"$boundary\"
+
+--${boundary}
+Content-Type: text/plain; charset=\"US-ASCII\"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: inline
+
+$body
+"
+
+# --------------------------------------------------------------- attachments --
+
+# attach the log file
+printf '%s\n' "--${boundary}
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename=\"$logfile\"
+"
+base64 "$logfile"
+echo
+
+# attach the output
+printf '%s\n' "--${boundary}
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename=\"$stdoutfile\"
+"
+base64 "$stdoutfile"
+echo
+
+# close attachments
+printf '%s\n' "--${boundary}--"
+ 
+} | /usr/lib/sendmail -t -oi   # one may also use -f here to set the envelope-from

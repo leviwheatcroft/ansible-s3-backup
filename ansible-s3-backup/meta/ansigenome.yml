@@ -1,0 +1,22 @@
+---
+
+ansigenome_info:
+  github_url: "https://github.com/leviwheatcroft/ansible-s3-backup"
+  git_branch: "master"
+  galaxy_id: ""
+
+  travis: True
+
+  license_url: 'https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3)'
+
+  authors:
+    - name:  'Maciej Delmanowski'
+      url: ''
+      email: 'levi@wht.cr'
+      twitter: 'leviwheatcroft'
+      github: 'leviwheatcroft'
+
+  synopsis: |
+    This role configures one or more backup jobs, which will sync local files
+    to an s3 bucket.
+

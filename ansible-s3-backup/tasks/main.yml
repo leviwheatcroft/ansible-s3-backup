@@ -1,0 +1,44 @@
+---
+
+- name: Install s3cmd packages
+  apt: pkg={{ item }} state=latest install_recommends=no
+  with_items: [ 's3cmd', 'trickle' ]
+
+- name: Create directories
+  file: path={{ item }} state=directory owner=root group=root mode=0755
+  with_items: [ '/etc/s3cmd' ]
+
+- name: Setup config (/etc/s3cmd/.s3cfg)
+  template: src=etc/s3cmd/.s3cfg.j2
+            dest=/etc/s3cmd/.s3cfg
+            owner=root group=root mode=0700
+
+- name: Setup backup script
+  template: src=etc/s3cmd/backup.sh.j2
+            dest=/etc/s3cmd/backup.sh
+            owner=root group=root mode=755
+
+- name: Setup include lists
+  template: src=etc/s3cmd/targets.incl.j2
+            dest=/etc/s3cmd/{{ item.name }}.incl
+            owner=root group=root mode=755
+  with_items: s3cmd_jobs
+
+- name: Setup exclude lists
+  template: src=etc/s3cmd/targets.excl.j2
+            dest=/etc/s3cmd/{{ item.name }}.excl
+            owner=root group=root mode=755
+  with_items: s3cmd_jobs
+
+- name: Setup cron jobs
+  cron:
+    dow={{ item.dow }}
+    dom={{ item.dom }}
+    hour={{ item.hour }}
+    minute={{ item.minute }}
+    month={{ item.month }}
+    name="s3cmd backup {{ item.name }}"
+    job="/etc/s3cmd/backup.sh"
+  with_items: s3cmd_jobs
+    
+
